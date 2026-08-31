@@ -1,0 +1,12 @@
+# built binary (~97MB)
+stream_cartesian_demo
+
+# machine cloud config: contains location secret + api key
+config.json
+
+# per-run artifacts
+trace*.json
+*.log
+*.pcap
+out
+pipeline_trace.html
