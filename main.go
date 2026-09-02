@@ -425,6 +425,15 @@ func run() error {
 	}
 	logger.Infof("%s response: %v", builtin.DoStreamStart, startResp)
 
+	streamStarted := time.Now()
+	logger.Infof("stream started at %s", streamStarted.Format("15:04:05"))
+	defer func() {
+		streamEnded := time.Now()
+		logger.Infof("stream timing: started %s, ended %s, lasted %s",
+			streamStarted.Format("15:04:05"), streamEnded.Format("15:04:05"),
+			streamEnded.Sub(streamStarted).Round(time.Second))
+	}()
+
 	// Poll stream_status in the background for the rest of the run, so we see the moment
 	// the arm halts on its own (running flips false, error appears) rather than only
 	// finding out once we start polling after stream_flush at the very end. trace:false
@@ -473,7 +482,9 @@ func run() error {
 			return fmt.Errorf("unexpected %s response: %v", builtin.DoStreamPush, pushResp)
 		}
 		if now := time.Now(); now.Sub(lastProgressLog) >= 2*time.Second || i == len(traj)-1 {
-			logger.Infof("streamed %d/%d waypoints (%.1f%%)", i+1, len(traj), 100*float64(i+1)/float64(len(traj)))
+			logger.Infof("streamed %d/%d waypoints (%.1f%%), elapsed %s",
+				i+1, len(traj), 100*float64(i+1)/float64(len(traj)),
+				time.Since(streamStarted).Round(time.Second))
 			lastProgressLog = now
 		}
 		if *pushSleep > 0 && i < len(traj)-1 {
