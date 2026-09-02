@@ -19,8 +19,8 @@
 //	                       server default applies (default 0)
 //	-shape string          shape to trace: "fig8", "snake", or "line" (default "fig8")
 //	-snake-rows int        number of raster passes, snake shape only (default 4)
-//	-repeats int           back-and-forth repetitions, line shape only; one rep = one pass
-//	                       each direction (default 4)
+//	-repeats int           repetitions: line = back-and-forth passes (one rep = one pass each
+//	                       direction); fig8 = number of laps (default 4)
 //	-fig8-y float          Y (mm) of the shape's plane (default 1200)
 //	-fig8-center-x float   shape center X (mm) (default 0)
 //	-fig8-center-z float   shape center Z (mm) (default 700)
@@ -203,7 +203,7 @@ func run() error {
 	targetRunwayMs := flag.Int("target-runway-ms", 0, "target_runway_in_arm_ms stream_start option; 0 omits it so the server default applies")
 	shape := flag.String("shape", "fig8", `shape to trace: "fig8", "snake", or "line"`)
 	snakeRows := flag.Int("snake-rows", 4, "number of raster passes, snake shape only")
-	lineRepeats := flag.Int("repeats", 4, "back-and-forth repetitions, line shape only; one rep = one pass each direction")
+	lineRepeats := flag.Int("repeats", 4, "repetitions: line = back-and-forth passes (one rep = one pass each direction); fig8 = number of laps")
 	figY := flag.Float64("fig8-y", 800, "Y (mm) of the shape's plane")
 	figCenterX := flag.Float64("fig8-center-x", 0, "shape center X (mm)")
 	figCenterZ := flag.Float64("fig8-center-z", 700, "shape center Z (mm)")
@@ -288,7 +288,12 @@ func run() error {
 	var points []spatialmath.Pose
 	switch *shape {
 	case "fig8":
-		points = figureEightPoses(*figCenterX, *figCenterZ, *figY, *figSpanX, *figSpanZ, *numWaypoints)
+		lap := figureEightPoses(*figCenterX, *figCenterZ, *figY, *figSpanX, *figSpanZ, *numWaypoints)
+		points = lap
+		for r := 1; r < *lineRepeats; r++ {
+			// The fig8 closes on itself (last pose == first), so skip the seam point on each extra lap.
+			points = append(points, lap[1:]...)
+		}
 	case "snake":
 		points = snakePoses(*figCenterX, *figCenterZ, *figY, *figSpanX, *figSpanZ, *numWaypoints, *snakeRows)
 	case "line":
@@ -355,7 +360,9 @@ func run() error {
 	}
 
 	logger.Info("planning...")
-	plan, _, err := armplanning.PlanMotion(ctx, logger, &armplanning.PlanRequest{
+	planLogger := logging.NewLogger("mp")
+	planLogger.SetLevel(logging.WARN)
+	plan, _, err := armplanning.PlanMotion(ctx, planLogger, &armplanning.PlanRequest{
 		FrameSystem: fs,
 		StartState:  startState,
 		Goals:       goals,
